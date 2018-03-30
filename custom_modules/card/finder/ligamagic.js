@@ -6,7 +6,16 @@ var requestp = require('../../requestp');
 /* Resource for ligamagic */
 module.exports = {
   find : function(cardname, proxy) {
-    // Add some way to get the card with this resource
+
+    /*Helper function*/
+    const findPrice = (className,$) => {
+      const priceElement = $("."+className)
+      const priceTD = Object.keys(priceElement)
+        .filter(key => priceElement[key].name=="td" )
+      return priceTD.map( key => priceElement[key].children)
+        .map(arrayOfElem=> parseFloat(
+          arrayOfElem[0].data.split("R$")[1].replace(',','.')))
+    }
     console.log("Looking for " + cardname);
     console.log("Proxy: " + proxy);
     return new Promise(function(resolve, reject) {
@@ -24,44 +33,35 @@ module.exports = {
             reject("Card not found");
 
           //read the data
+          var isCard = new RegExp("%3d", 'g')
           var $ = cheerio.load(body);
           var title = $(".cardTitle").text();
           var card_sets_obj = {};
           var card_set_array = [];
           var card = {};
           var moeda = "BRL";
-          $(".overview td").each(function(i, elem) {
-            var card_set = $("a", elem).attr("href");
-            card_set = card_set.split("%3d")[1];
-            card_sets_obj[card_set] = {}; //No prices found yet!
-            card_sets_obj[card_set][moeda] = []; //Set prices as USD
-
-            //@TODO:  Stop reading from the Javascript at the end of the page
-            //        and scrappe the page instead. Dumbass! There's a table
-            //        with the prices, lel!
-
-            //Find the minor price for the card
-            var regexMinorPrice = new RegExp("VETprecoMenor\\[" + i.toString() + "\\]\\s+=\\s+\"(.*)\";", "i");
-            var minorPrice = body.match(regexMinorPrice)[1].replace(',', '.');
-            card_sets_obj[card_set][moeda].push(minorPrice);
-
-            //Find the medium price for the card
-            var regexMediumPrice = new RegExp("VETprecoMedio\\[" + i.toString() + "\\]\\s+=\\s+\"(.*)\";", "i");
-            var mediumPrice = body.match(regexMediumPrice)[1].replace(',', '.');
-            card_sets_obj[card_set][moeda].push(mediumPrice);
-
-            //Find the major price for the card
-            var regexMajorPrice = new RegExp("VETprecoMaior\\[" + i.toString() + "\\]\\s+=\\s+\"(.*)\";", "i");
-            var majorPrice = body.match(regexMajorPrice)[1].replace(',', '.');
-            card_sets_obj[card_set][moeda].push(majorPrice);
-          });
-
+          var card_table =$(".tabela-card").find("a")
+          var a_elements = Object.keys(card_table).map( (key,index) => 
+            card_table[key])
+          var a_elements_attributes = a_elements.map( link => link.attribs)
+          var editions = a_elements_attributes.filter( elem => elem!==undefined ).map(elem => elem.href).filter( elem => isCard.test(elem) ).map( elem=> elem.split("%3d")[1])
+          var menorPreco = findPrice("menor-preco",$)
+          var medioPreco= findPrice("preco-medio",$)
+          var maiorPreco= findPrice("maior-preco",$)
+          console.log(menorPreco)
+          console.log(medioPreco)
+          console.log(maiorPreco)
+          editions.forEach( (edition,index)=> { 
+            card_sets_obj[edition] = {}; //No prices found yet!
+            card_sets_obj[edition][moeda] = [menorPreco[index],medioPreco[index],maiorPreco[index]]; //Set prices as USD
+            console.log(card_sets_obj)
+          })
           card["title"] = title;
           card["prices"] = card_sets_obj;
           card["sets"] = Object.keys(card_sets_obj);
           card["currencies"] = [moeda];
           card["url"] = request_options["url"];
-
+          console.log(card)
           resolve(card);
           //resolve("Misterious card info!");
         }, function(err) {
@@ -70,3 +70,5 @@ module.exports = {
     });
   }
 }
+
+
